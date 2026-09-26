@@ -47,6 +47,7 @@
 
   const c = (stats && stats.counters) || {};
   const alerts = (stats && stats.alerts) || {};
+  const tickets = (stats && stats.tickets) || {};
   const engine = (stats && stats.engine) || {};
 
   page.innerHTML = `
@@ -55,6 +56,19 @@
       <div class="stat"><div class="label">命中率</div><div class="value ${(c.hit_rate || 0) > 0.3 ? "danger" : "primary"}">${((c.hit_rate || 0) * 100).toFixed(1)}%</div><div class="hint">命中 ${c.matched || 0} 条</div></div>
       <div class="stat"><div class="label">拒绝率</div><div class="value danger">${((c.reject_rate || 0) * 100).toFixed(1)}%</div><div class="hint">拒绝 ${c.rejected || 0} 条</div></div>
       <div class="stat"><div class="label">告警总数</div><div class="value warning">${alerts.total || 0}</div><div class="hint">去重比 ${alerts.dedup_ratio || 0}</div></div>
+    </div>
+
+    <div class="grid cols-4">
+      <a class="stat" href="/tickets.html?status=pending" style="text-decoration:none;color:inherit">
+        <div class="label">待受理工单</div>
+        <div class="value ${tickets.overdue ? "danger" : "warning"}">${(tickets.by_status && tickets.by_status.pending) || 0}</div>
+        <div class="hint">${tickets.overdue
+          ? `<span style="color:var(--danger);font-weight:700">⏰ ${tickets.overdue} 单超时未处理</span>`
+          : "人工复核队列"}</div>
+      </a>
+      <div class="stat"><div class="label">处理中</div><div class="value" style="color:var(--info)">${(tickets.by_status && tickets.by_status.processing) || 0}</div><div class="hint">已受理工单</div></div>
+      <div class="stat"><div class="label">已通过</div><div class="value success">${(tickets.by_status && tickets.by_status.approved) || 0}</div><div class="hint">复核放行</div></div>
+      <div class="stat"><div class="label">已驳回</div><div class="value danger">${(tickets.by_status && tickets.by_status.rejected) || 0}</div><div class="hint">复核拒绝</div></div>
     </div>
 
     <div class="grid cols-2">
@@ -87,6 +101,7 @@
         <a class="btn" href="/flows.html">决策流设计</a>
         <a class="btn" href="/events.html">实时事件流</a>
         <a class="btn" href="/alerts.html">告警列表</a>
+        <a class="btn warning" href="/tickets.html">📝 复核工单${tickets.overdue ? `（${tickets.overdue} 单超时）` : ""}</a>
         <a class="btn" href="/stats.html">统计报表</a>
         <a class="btn" href="/sandbox.html">测试沙箱</a>
       </div>

@@ -54,6 +54,7 @@ function appendEvent(event, decision) {
     <span class="tag">${icon} ${UI.esc(event.type)}</span>
     <span style="flex:1;color:#9ca3af">${UI.esc(event.ip || "")} ${UI.esc(event.user_id || "")} ${event.amount != null ? "¥" + event.amount : ""}</span>
     ${decision.matched ? `<span class="tag">命中${decision.fired_rules.length}条</span>` : ""}
+    ${decision.ticket_id ? `<span class="tag" style="color:#fbbf24;cursor:pointer" onclick="location.href='/tickets.html'">📝 已建工单</span>` : ""}
     <span class="${actCls}">${actLabel} ${risk ? "· " + risk : ""}</span>`;
   log.appendChild(line);
   lineCount++;

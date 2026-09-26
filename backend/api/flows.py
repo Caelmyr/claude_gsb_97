@@ -1,9 +1,11 @@
 """决策流设计 API。"""
+import time
+
 from flask import Blueprint, request, jsonify
 
 from backend import runtime
 from backend.auth import login_required, role_required
-from backend.flows import FlowValidationError
+from backend.flows import FlowValidationError, _scale_score
 
 bp = Blueprint("flows", __name__, url_prefix="/api/flows")
 
@@ -64,3 +66,40 @@ def update_flow(flow_id):
 @role_required("admin")
 def delete_flow(flow_id):
     return jsonify({"ok": runtime.flow_store.delete_flow(flow_id)})
+
+
+@bp.route("/<flow_id>/execute", methods=["POST"])
+@login_required
+def execute_flow(flow_id):
+    """生产路径执行决策流：判定为人工复核（review）时同样自动生成复核工单。"""
+    data = request.get_json(force=True, silent=True) or {}
+    event = data.get("event", data)
+    if not isinstance(event, dict):
+        return jsonify({"ok": False, "error": "事件必须是 JSON 对象"}), 400
+    compiled = runtime.flow_store.compile(flow_id)
+    if compiled is None:
+        return jsonify({"ok": False, "error": "决策流不存在或编译失败"}), 404
+
+    ts = event.get("ts") or time.time()
+    event.setdefault("ts", ts)
+    event.setdefault("id", event.get("id") or f"ev_flow_{int(ts * 1000)}")
+    result = compiled.execute(event)
+
+    ticket_id = None
+    if result.get("action") == "review":
+        # 决策流动作节点 -> 工单命中规则视图
+        hit = [{
+            "rule_id": flow_id,
+            "rule_name": result.get("flow_name") or flow_id,
+            "reason": a.get("reason") or "决策流转人工复核",
+            "risk_score": _scale_score(a.get("risk_score", 0)),
+            "action": "review",
+        } for a in result.get("actions", []) if a.get("action") in ("review", "reject")]
+        preview = {"fired_rules": hit, "risk_score": result.get("risk_score", 0)}
+        ticket, _ = runtime.engine.tickets.create_for_event(
+            event, preview, source="decision_flow",
+            source_name=f"决策流：{result.get('flow_name') or flow_id}", ts=ts)
+        ticket_id = ticket["id"]
+    result["ticket_id"] = ticket_id
+    result["review_required"] = result.get("action") == "review"
+    return jsonify({"ok": True, "result": result, "event": event})

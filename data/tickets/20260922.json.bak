@@ -1,0 +1,72 @@
+{
+  "tickets": [
+    {
+      "id": "tk_1790130568337_0005",
+      "event_id": "ev_demo_6",
+      "source": "rule_engine",
+      "source_name": "风控规则引擎",
+      "summary": "transfer，金额 ¥105000，地区 CN，渠道 app，命中「金额突增检测」，风险分 60",
+      "event_type": "transfer",
+      "event": {
+        "id": "ev_demo_6",
+        "type": "transfer",
+        "ts": 1790130568.3378892,
+        "ip": "10.20.30.6",
+        "user_id": "u10006",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "CN",
+        "amount": 105000,
+        "risk_hint": "new_device"
+      },
+      "subject": {
+        "user_id": "u10006",
+        "ip": "10.20.30.6",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "CN"
+      },
+      "hit_rules": [
+        {
+          "rule_id": "rule_amount_spike",
+          "rule_name": "金额突增检测",
+          "reason": "金额突增",
+          "risk_score": 60,
+          "action": "review",
+          "priority": 90,
+          "agg_values": []
+        }
+      ],
+      "risk_score": 60,
+      "status": "processing",
+      "assignee": "admin",
+      "creator": "system",
+      "created_at": 1790130568.3378892,
+      "updated_at": 1790131768.3378892,
+      "accepted_at": 1790131768.3378892,
+      "approved_at": null,
+      "rejected_at": null,
+      "closed_at": null,
+      "disposition": null,
+      "disposition_by": null,
+      "disposition_ts": null,
+      "timeout_sec": 3600,
+      "comments": [
+        {
+          "action": "create",
+          "action_label": "系统建单",
+          "by": "system",
+          "ts": 1790130568.3378892,
+          "comment": "风控判定为人工复核，系统自动建单"
+        },
+        {
+          "action": "accept",
+          "action_label": "受理",
+          "by": "admin",
+          "ts": 1790131768.3378892,
+          "comment": "受理"
+        }
+      ]
+    }
+  ]
+}

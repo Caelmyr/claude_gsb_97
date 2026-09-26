@@ -34,9 +34,10 @@ def create_app():
     seed.seed_all(engine, flows)
 
     # ---- 注册 API 蓝图 ----
-    from backend.api import (rules, events, alerts, stats, users,
+    from backend.api import (rules, events, alerts, tickets, stats, users,
                              settings, sandbox, dict as dict_api, flows as flows_api)
-    for module in (rules, events, alerts, stats, users, settings, sandbox, dict_api, flows_api):
+    for module in (rules, events, alerts, tickets, stats, users, settings,
+                   sandbox, dict_api, flows_api):
         app.register_blueprint(module.bp)
 
     # ---- 认证 ----

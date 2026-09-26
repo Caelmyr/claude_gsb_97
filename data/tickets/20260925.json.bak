@@ -1,0 +1,185 @@
+{
+  "tickets": [
+    {
+      "id": "tk_1790382568337_0000",
+      "event_id": "ev_demo_1",
+      "source": "rule_engine",
+      "source_name": "风控规则引擎",
+      "summary": "transfer，金额 ¥129000，地区 RU，渠道 app，命中「高风险国家交易」，风险分 70",
+      "event_type": "transfer",
+      "event": {
+        "id": "ev_demo_1",
+        "type": "transfer",
+        "ts": 1790382568.3378892,
+        "ip": "10.20.30.1",
+        "user_id": "u10001",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "RU",
+        "amount": 129000
+      },
+      "subject": {
+        "user_id": "u10001",
+        "ip": "10.20.30.1",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "RU"
+      },
+      "hit_rules": [
+        {
+          "rule_id": "rule_highrisk_country",
+          "rule_name": "高风险国家交易",
+          "reason": "高风险地区交易",
+          "risk_score": 70,
+          "action": "review",
+          "priority": 90,
+          "agg_values": []
+        }
+      ],
+      "risk_score": 70,
+      "status": "pending",
+      "assignee": null,
+      "creator": "system",
+      "created_at": 1790382568.3378892,
+      "updated_at": 1790382568.3378892,
+      "accepted_at": null,
+      "approved_at": null,
+      "rejected_at": null,
+      "closed_at": null,
+      "disposition": null,
+      "disposition_by": null,
+      "disposition_ts": null,
+      "timeout_sec": 3600,
+      "comments": [
+        {
+          "action": "create",
+          "action_label": "系统建单",
+          "by": "system",
+          "ts": 1790382568.3378892,
+          "comment": "风控判定为人工复核，系统自动建单"
+        }
+      ]
+    },
+    {
+      "id": "tk_1790387968337_0001",
+      "event_id": "ev_demo_2",
+      "source": "rule_engine",
+      "source_name": "风控规则引擎",
+      "summary": "transfer，金额 ¥156000，地区 CN，渠道 app，命中「大额转账检测」，风险分 72",
+      "event_type": "transfer",
+      "event": {
+        "id": "ev_demo_2",
+        "type": "transfer",
+        "ts": 1790387968.3378892,
+        "ip": "10.20.30.2",
+        "user_id": "u10002",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "CN",
+        "amount": 156000
+      },
+      "subject": {
+        "user_id": "u10002",
+        "ip": "10.20.30.2",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "CN"
+      },
+      "hit_rules": [
+        {
+          "rule_id": "rule_big_transfer",
+          "rule_name": "大额转账检测",
+          "reason": "大额转账需人工复核",
+          "risk_score": 72,
+          "action": "review",
+          "priority": 90,
+          "agg_values": []
+        }
+      ],
+      "risk_score": 72,
+      "status": "pending",
+      "assignee": null,
+      "creator": "system",
+      "created_at": 1790387968.3378892,
+      "updated_at": 1790387968.3378892,
+      "accepted_at": null,
+      "approved_at": null,
+      "rejected_at": null,
+      "closed_at": null,
+      "disposition": null,
+      "disposition_by": null,
+      "disposition_ts": null,
+      "timeout_sec": 3600,
+      "comments": [
+        {
+          "action": "create",
+          "action_label": "系统建单",
+          "by": "system",
+          "ts": 1790387968.3378892,
+          "comment": "风控判定为人工复核，系统自动建单"
+        }
+      ]
+    },
+    {
+      "id": "tk_1790388868337_0002",
+      "event_id": "ev_demo_3",
+      "source": "rule_engine",
+      "source_name": "风控规则引擎",
+      "summary": "transfer，金额 ¥131000，地区 CN，渠道 app，命中「金额突增检测」，风险分 58",
+      "event_type": "transfer",
+      "event": {
+        "id": "ev_demo_3",
+        "type": "transfer",
+        "ts": 1790388868.3378892,
+        "ip": "10.20.30.3",
+        "user_id": "u10003",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "CN",
+        "amount": 131000,
+        "risk_hint": "amount_spike"
+      },
+      "subject": {
+        "user_id": "u10003",
+        "ip": "10.20.30.3",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "CN"
+      },
+      "hit_rules": [
+        {
+          "rule_id": "rule_amount_spike",
+          "rule_name": "金额突增检测",
+          "reason": "金额突增",
+          "risk_score": 58,
+          "action": "review",
+          "priority": 90,
+          "agg_values": []
+        }
+      ],
+      "risk_score": 58,
+      "status": "pending",
+      "assignee": null,
+      "creator": "system",
+      "created_at": 1790388868.3378892,
+      "updated_at": 1790388868.3378892,
+      "accepted_at": null,
+      "approved_at": null,
+      "rejected_at": null,
+      "closed_at": null,
+      "disposition": null,
+      "disposition_by": null,
+      "disposition_ts": null,
+      "timeout_sec": 3600,
+      "comments": [
+        {
+          "action": "create",
+          "action_label": "系统建单",
+          "by": "system",
+          "ts": 1790388868.3378892,
+          "comment": "风控判定为人工复核，系统自动建单"
+        }
+      ]
+    }
+  ]
+}

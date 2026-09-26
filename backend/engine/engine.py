@@ -20,6 +20,7 @@ import threading
 from backend.engine.hot_update import RuleRegistry
 from backend.engine.window import SlidingWindowAggregator
 from backend.engine.alert import AlertAggregator
+from backend.engine.ticket import TicketStore
 from backend.engine.rule_parser import _get_field
 from backend.event_store import EventStore
 from backend import config
@@ -50,6 +51,10 @@ class RiskEngine:
         self.alerts = AlertAggregator(
             dedup_window_sec=eng.get("dedup_window_sec", 300),
             max_alert_keep=alert_keep,
+        )
+        # 人工复核工单（命中后自动建单，按天分片持久化）
+        self.tickets = TicketStore(
+            timeout_sec=eng.get("ticket_timeout_sec", 3600),
         )
         self.events = EventStore()
 
@@ -210,7 +215,6 @@ class RiskEngine:
             m["matched"] += 1 if matched else 0
             m["rejected"] += 1 if action == "reject" else 0
             m["alerted"] += len(alert_results)
-
         display_action = action
         if action == "reject":
             display_action = "review"
@@ -235,13 +239,29 @@ class RiskEngine:
                 "agg_values": fired_agg.get(r.id, []),
             }
 
+        fired_details = [_detail(r) for r in fired]
+
+        # 6.5) 判定为人工复核（内部 review）→ 自动生成复核工单（同一事件幂等）
+        ticket_id = None
+        if action == "review":
+            ticket_preview = {
+                "fired_rules": fired_details,
+                "risk_score": max_score,
+            }
+            ticket, _created = self.tickets.create_for_event(
+                event, ticket_preview, source="rule_engine",
+                source_name="风控规则引擎", ts=ts)
+            ticket_id = ticket["id"]
+
         decision = {
             "event_id": event.get("id"),
             "ts": ts,
             "matched": matched,
             "action": display_action,
+            "review_required": action == "review",
+            "ticket_id": ticket_id,
             "risk_score": max_score,
-            "fired_rules": [_detail(r) for r in fired],
+            "fired_rules": fired_details,
             "alerts": alert_results,
             "elapsed_us": elapsed_us,
             "engine_version": snapshot.version,
@@ -253,6 +273,11 @@ class RiskEngine:
             "event": event,
             "decision": decision,
         })
+        if ticket_id:
+            self._broadcast({
+                "kind": "ticket",
+                "ticket": self.tickets.get(ticket_id),
+            })
         return decision
 
     # ------------------------------------------------------------------
@@ -386,6 +411,7 @@ class RiskEngine:
             "minute_series": series,
             "window": self.window.stats(),
             "alerts": self.alerts.stats(),
+            "tickets": self.tickets.stats(),
             "engine": self.registry.current.describe(),
         }
 

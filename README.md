@@ -1,12 +1,12 @@
 # 实时风控规则引擎与决策流 (Real-time Risk Control Rule Engine & Decision Flow)
 
-一个完整的实时风控规则引擎与决策流系统，支持可视化规则配置、决策流拖拽编排、WebSocket 实时事件流、滑动窗口聚合（短时高频计数）、规则动态热更新与版本回滚、告警聚合去重、统计报表与测试沙箱。
+一个完整的实时风控规则引擎与决策流系统，支持可视化规则配置、决策流拖拽编排、WebSocket 实时事件流、滑动窗口聚合（短时高频计数）、规则动态热更新与版本回滚、告警聚合去重、人工复核工单全流程、统计报表与测试沙箱。
 
-规则、事件、告警全部以 JSON 文件存储（规则按版本、事件按小时分片），无外部数据库依赖，开箱即用。
+规则、事件、告警、复核工单全部以 JSON 文件存储（规则按版本、事件按小时分片、告警/工单按天分片），无外部数据库依赖，开箱即用。
 
 ## 🚀 功能特性
 
-### 前端（10 个页面，原生 HTML/CSS/JS）
+### 前端（12 个页面，原生 HTML/CSS/JS）
 | 页面 | 路径 | 说明 |
 |------|------|------|
 | 登录 / 总览 | `index.html` | 登录认证、系统概览看板、关键指标 |
@@ -14,9 +14,10 @@
 | 决策流设计 | `flows.html` | 可视化拖拽节点（条件 / 动作 / 分支）编排决策流 |
 | 实时事件流 | `events.html` | WebSocket 滚动展示实时事件与命中告警 |
 | 告警列表 | `alerts.html` | 告警查询、去重计数、标记处理、导出（CSV/JSON） |
-| 统计报表 | `stats.html` | ECharts 图表：命中率、拒绝率、事件趋势、规则命中排行 |
+| 复核工单 | `tickets.html` | 人工复核工单中心：筛选、受理/通过/驳回/关闭、超时红色提醒、处理时间线 |
+| 统计报表 | `stats.html` | ECharts 图表：命中率、拒绝率、事件趋势、规则命中排行、工单状态分布 |
 | 用户管理 | `users.html` | 用户 CRUD、角色（admin/analyst/viewer）、重置密码 |
-| 系统设置 | `settings.html` | 匹配模式切换、去重窗口、滑动窗口容量参数 |
+| 系统设置 | `settings.html` | 匹配模式切换、去重窗口、滑动窗口容量、工单处理时限参数 |
 | 规则版本管理 | `versions.html` | 版本历史、LCS 行级 diff、一键回滚 |
 | 测试沙箱 | `sandbox.html` | 单事件 dry-run、单规则测试、决策流测试、窗口预热 |
 | 数据字典 | `dict.html` | 事件类型、风险等级、动作类型等枚举统一维护 |
@@ -52,19 +53,21 @@ gsb3/
 │   │   ├── window.py          # 滑动窗口聚合器（三层内存预算）
 │   │   ├── hot_update.py      # 规则注册表：原子热更新 + 版本历史 + 回滚
 │   │   ├── alert.py           # 告警聚合去重（指纹哈希索引）
-│   │   └── engine.py          # 风控引擎编排：匹配→聚合→决策→去重→持久化→广播
+│   │   ├── ticket.py          # 人工复核工单：状态机 + 按天分片持久化 + 超时计算
+│   │   └── engine.py          # 风控引擎编排：匹配→聚合→决策→去重→工单→持久化→广播
 │   └── api/
 │       ├── rules.py           # 规则 CRUD、校验、版本、回滚
 │       ├── events.py          # 事件查询、摄取、模拟突发、存储统计
 │       ├── alerts.py          # 告警查询、标记、导出、统计
+│       ├── tickets.py         # 复核工单查询筛选、受理/通过/驳回/关闭、处理人
 │       ├── stats.py           # 统计报表（命中率/拒绝率/趋势）
-│       ├── flows.py           # 决策流 CRUD 与执行
+│       ├── flows.py           # 决策流 CRUD、生产执行（复核自动建工单）
 │       ├── sandbox.py         # dry-run、单规则/决策流测试、窗口预热
 │       ├── users.py           # 用户管理
 │       ├── settings.py        # 系统设置
 │       └── dict.py            # 数据字典
-├── frontend/                  # 11 个页面 + assets/css/style.css + assets/js/api.js
-├── data/                      # JSON 数据（运行时自动创建）：rules/versions/events/alerts/...
+├── frontend/                  # 12 个页面 + assets/css/style.css + assets/js/api.js
+├── data/                      # JSON 数据（运行时自动创建）：rules/versions/events/alerts/tickets/...
 ├── requirements.txt
 ├── run.py                     # 一键启动脚本
 └── README.md
@@ -107,7 +110,15 @@ python run.py
 - **指纹哈希索引**：`md5(rule_id + 归一化去重字段)` 生成指纹，内存哈希表建立「指纹 → 时间戳/计数」索引
 - **时间窗去重**：同一指纹在 `dedup_window_sec` 内重复出现只累加 `count`，不产生新告警记录；窗口外重新计入，避免告警风暴的同时保留告警频率信息
 
-### 5. JSON 规则并发读写安全
+### 5. 人工复核工单闭环
+- **自动建单**：规则引擎最终决策为人工复核（内部 `review`，含规则配置的 reject/review 动作）或决策流执行到复核动作时，自动生成一条工单；同一 `event_id` 幂等只建一单，重复判定不产生重复工单
+- **工单内容**：事件概要（类型/金额/地区/首要命中原因/风险分）、命中规则明细（含聚合值）、风险分、主体信息（用户/IP/设备/渠道/地区）、事件快照与发生时间
+- **状态机**：`待受理 → 处理中 → 已通过 / 已驳回`，活动状态可转 `已关闭`；记录受理人、每条处理意见以及创建/受理/通过/驳回/关闭各状态变更时间
+- **超时提醒**：`ticket_timeout_sec`（默认 1 小时，可在系统设置调整）后仍处于活动状态的工单实时计算 `overdue`，列表行红色高亮、`⏰ 超时` 徽章闪烁并置顶排序；总览页与工单中心磁贴汇总超时单数
+- **处置沉淀**：通过/驳回结果作为事件处置结论（`disposition/disposition_by/disposition_ts`）随工单按天分片 JSON 持久化，重启后完整恢复
+- **筛选**：支持按状态、处理人、时间范围（事件发生时间）、来源（规则/决策流）、关键词与超时标记筛选，WebSocket 实时推送新工单
+
+### 6. JSON 规则并发读写安全
 - **进程内锁**：每个数据路径一把 `threading.RLock`，读-改-写原语全程持锁
 - **跨进程锁**：`fcntl.flock` 文件锁，多进程下仍互斥；内部原语不加 flock，避免同一进程内嵌套 flock 造成自死锁
 - **原子写**：写临时文件 → `fsync` → `os.replace` 原子替换，崩溃/中断也不产生半写文件；替换前额外备份 `.bak` 兜底
@@ -118,8 +129,10 @@ python run.py
 - 规则：`GET/POST /api/rules`、`GET/PUT/DELETE /api/rules/<id>`、`POST /api/rules/validate`、`POST /api/rules/<id>/enable`、`GET /api/rules/<id>/versions`、`POST /api/rules/<id>/rollback`
 - 事件：`GET /api/events`、`POST /api/events/ingest`、`POST /api/events/simulate`、`GET /api/events/store_stats`
 - 告警：`GET /api/alerts`、`POST /api/alerts/mark`、`GET /api/alerts/export`、`GET /api/alerts/stats`
+- 复核工单：`GET /api/tickets`（状态/处理人/时间范围/关键词/超时筛选）、`GET /api/tickets/<id>`、
+  `POST /api/tickets/<id>/accept|approve|reject|close`、`GET /api/tickets/stats`、`GET /api/tickets/assignees`
 - 统计：`GET /api/stats`、`POST /api/stats/reset`
-- 决策流：`GET/POST /api/flows`、`GET/PUT/DELETE /api/flows/<id>`
+- 决策流：`GET/POST /api/flows`、`GET/PUT/DELETE /api/flows/<id>`、`POST /api/flows/<id>/execute`
 - 沙箱：`POST /api/sandbox/dry_run`、`/test_rule`、`/test_flow`、`/seed_window`
 - 用户：`GET/POST /api/users`、`PUT/DELETE /api/users/<username>`、`POST /api/users/<username>/password`、`POST /api/users/me/password`
 - 设置：`GET/PUT /api/settings`

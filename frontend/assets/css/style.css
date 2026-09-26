@@ -308,3 +308,45 @@ svg.flow-edges path { fill: none; stroke: #94a3b8; stroke-width: 2; marker-end: 
 .diff-del { background: #fee2e2; }
 .diff-same { color: #6b7280; }
 pre.json-view { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-size: 12.5px; }
+
+/* ---------- 复核工单 ---------- */
+.badge.overdue-badge {
+  background: #dc2626; color: #fff;
+  animation: overdue-blink 1.2s ease-in-out infinite;
+}
+@keyframes overdue-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220, 38, 38, .5); }
+  50% { opacity: .72; box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+}
+tr.row-overdue { background: #fef2f2; }
+tr.row-overdue:hover { background: #fee2e2; }
+.ticket-summary { min-width: 220px; }
+.ticket-summary .ts-main { font-weight: 600; }
+.ticket-summary .ts-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+
+/* 详情描述列表 */
+.desc-list { display: grid; grid-template-columns: 110px 1fr; gap: 8px 14px; font-size: 13px; margin: 0; }
+.desc-list dt { color: var(--text-dim); font-weight: 600; }
+.desc-list dd { margin: 0; word-break: break-all; }
+.section-title { font-weight: 700; font-size: 13px; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+/* 处理时间线 */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { position: relative; padding: 0 0 16px 22px; border-left: 2px solid var(--border); margin-left: 7px; }
+.timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline li::before {
+  content: ""; position: absolute; left: -7px; top: 3px;
+  width: 12px; height: 12px; border-radius: 50%; background: var(--primary);
+  border: 2px solid #fff; box-shadow: 0 0 0 2px var(--primary);
+}
+.timeline li.tl-create::before { background: #6b7280; box-shadow: 0 0 0 2px #6b7280; }
+.timeline li.tl-approve::before { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
+.timeline li.tl-reject::before { background: var(--danger); box-shadow: 0 0 0 2px var(--danger); }
+.timeline li.tl-close::before { background: #94a3b8; box-shadow: 0 0 0 2px #94a3b8; }
+.timeline .tl-head { font-size: 13px; font-weight: 600; }
+.timeline .tl-meta { font-size: 12px; color: var(--text-dim); margin: 1px 0 3px; }
+.timeline .tl-comment { font-size: 13px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; }
+.filter-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
+.filter-bar .field { margin: 0; }
+.filter-bar input[type=datetime-local], .filter-bar select { width: auto; min-width: 130px; }
+

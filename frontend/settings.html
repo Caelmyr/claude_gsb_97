@@ -21,6 +21,7 @@ async function load() {
   document.getElementById("dedup_window").value = e.dedup_window_sec;
   document.getElementById("max_alert_keep").value = e.max_alert_keep;
   document.getElementById("event_ttl").value = e.event_ttl_sec;
+  document.getElementById("ticket_timeout").value = e.ticket_timeout_sec;
   document.getElementById("w_max_keys").value = e.window_max_keys;
   document.getElementById("w_max_ev_key").value = e.window_max_events_per_key;
   document.getElementById("w_max_total").value = e.window_max_total_events;
@@ -34,6 +35,7 @@ async function save() {
       dedup_window_sec: parseInt(document.getElementById("dedup_window").value) || 300,
       max_alert_keep: parseInt(document.getElementById("max_alert_keep").value) || 5000,
       event_ttl_sec: parseInt(document.getElementById("event_ttl").value) || 3600,
+      ticket_timeout_sec: parseInt(document.getElementById("ticket_timeout").value) || 3600,
       window_max_keys: parseInt(document.getElementById("w_max_keys").value) || 200000,
       window_max_events_per_key: parseInt(document.getElementById("w_max_ev_key").value) || 20000,
       window_max_total_events: parseInt(document.getElementById("w_max_total").value) || 2000000,
@@ -61,6 +63,7 @@ boot("系统设置", () => {
         <div class="field"><label>告警去重窗口（秒）</label><input id="dedup_window" type="number"></div>
         <div class="field"><label>内存最大保留告警数</label><input id="max_alert_keep" type="number"></div>
         <div class="field"><label>事件保留时长（秒）</label><input id="event_ttl" type="number"></div>
+        <div class="field"><label>复核工单处理时限（秒）</label><input id="ticket_timeout" type="number"></div>
         <div class="field"><label>滑动窗口最大键数</label><input id="w_max_keys" type="number"></div>
         <div class="field"><label>单键最大事件数</label><input id="w_max_ev_key" type="number"></div>
         <div class="field"><label>窗口最大事件总数</label><input id="w_max_total" type="number"></div>

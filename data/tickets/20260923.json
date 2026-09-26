@@ -1,0 +1,78 @@
+{
+  "tickets": [
+    {
+      "id": "tk_1790216968337_0004",
+      "event_id": "ev_demo_5",
+      "source": "rule_engine",
+      "source_name": "风控规则引擎",
+      "summary": "transfer，金额 ¥230000，地区 CN，渠道 openapi，命中「大额转账检测」，风险分 78",
+      "event_type": "transfer",
+      "event": {
+        "id": "ev_demo_5",
+        "type": "transfer",
+        "ts": 1790216968.3378892,
+        "ip": "10.20.30.5",
+        "user_id": "u10005",
+        "device_id": "ios",
+        "channel": "openapi",
+        "country": "CN",
+        "amount": 230000
+      },
+      "subject": {
+        "user_id": "u10005",
+        "ip": "10.20.30.5",
+        "device_id": "ios",
+        "channel": "openapi",
+        "country": "CN"
+      },
+      "hit_rules": [
+        {
+          "rule_id": "rule_big_transfer",
+          "rule_name": "大额转账检测",
+          "reason": "大额转账需人工复核",
+          "risk_score": 78,
+          "action": "review",
+          "priority": 90,
+          "agg_values": []
+        }
+      ],
+      "risk_score": 78,
+      "status": "rejected",
+      "assignee": "alice",
+      "creator": "system",
+      "created_at": 1790216968.3378892,
+      "updated_at": 1790218768.3378892,
+      "accepted_at": 1790217768.3378892,
+      "approved_at": null,
+      "rejected_at": 1790218768.3378892,
+      "closed_at": null,
+      "disposition": "rejected",
+      "disposition_by": "admin",
+      "disposition_ts": 1790218768.3378892,
+      "timeout_sec": 3600,
+      "comments": [
+        {
+          "action": "create",
+          "action_label": "系统建单",
+          "by": "system",
+          "ts": 1790216968.3378892,
+          "comment": "风控判定为人工复核，系统自动建单"
+        },
+        {
+          "action": "accept",
+          "action_label": "受理",
+          "by": "alice",
+          "ts": 1790217768.3378892,
+          "comment": "受理"
+        },
+        {
+          "action": "reject",
+          "action_label": "驳回",
+          "by": "admin",
+          "ts": 1790218768.3378892,
+          "comment": "收款账户命中黑名单，交易特征异常，驳回并冻结资金"
+        }
+      ]
+    }
+  ]
+}

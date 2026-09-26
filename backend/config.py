@@ -18,6 +18,7 @@ RULES_DIR = os.path.join(DATA_DIR, "rules")        # 规则：按版本存储
 VERSIONS_DIR = os.path.join(DATA_DIR, "versions")  # 规则版本历史
 EVENTS_DIR = os.path.join(DATA_DIR, "events")      # 事件：按小时分片
 ALERTS_DIR = os.path.join(DATA_DIR, "alerts")      # 告警：按天分片
+TICKETS_DIR = os.path.join(DATA_DIR, "tickets")    # 复核工单：按天分片
 USERS_DIR = os.path.join(DATA_DIR, "users")        # 用户
 FLOWS_DIR = os.path.join(DATA_DIR, "flows")        # 决策流
 DICT_DIR = os.path.join(DATA_DIR, "dict")          # 数据字典
@@ -46,6 +47,7 @@ DEFAULT_SETTINGS = {
         "window_max_events_per_key": 20000,  # 单键最大事件数
         "window_max_total_events": 2000000,  # 全窗口最大事件总数
         "event_ttl_sec": 3600,          # 事件在内存中的保留时长
+        "ticket_timeout_sec": 3600,     # 复核工单处理超时阈值（秒），默认 1 小时
     },
     "alert": {
         "levels": ["低", "中", "高", "严重"],
@@ -58,6 +60,11 @@ DEFAULT_SETTINGS = {
 # 动作类型
 ACTION_TYPES = ["reject", "review", "pass", "alert"]
 
+# 复核工单状态：待受理 → 处理中 → 已通过 / 已驳回；任意活动状态可关闭
+TICKET_STATUSES = ["pending", "processing", "approved", "rejected", "closed"]
+# 活动（未终态）状态：未受理 / 处理中
+TICKET_ACTIVE_STATUSES = ["pending", "processing"]
+
 # 条件操作符
 CONDITION_OPS = ["==", "!=", ">", ">=", "<", "<=", "in", "not_in", "contains", "regex", "exists"]
 
@@ -67,7 +74,7 @@ AGG_TYPES = ["count", "sum", "avg", "distinct_count", "max", "min"]
 
 def ensure_dirs():
     """确保所有数据目录存在。"""
-    for d in (RULES_DIR, VERSIONS_DIR, EVENTS_DIR, ALERTS_DIR, USERS_DIR,
+    for d in (RULES_DIR, VERSIONS_DIR, EVENTS_DIR, ALERTS_DIR, TICKETS_DIR, USERS_DIR,
               FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR):
         os.makedirs(d, exist_ok=True)
     if not os.path.exists(SETTINGS_FILE):

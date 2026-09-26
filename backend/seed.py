@@ -1,8 +1,9 @@
-"""初始化样例数据：规则（含多版本历史）、数据字典、示例决策流。
+"""初始化样例数据：规则（含多版本历史）、数据字典、示例决策流、复核工单。
 
 仅在 data/rules 为空时执行，保证幂等。
 """
 import os
+import time
 
 from backend import config
 from backend.storage import atomic_write_json
@@ -183,4 +184,81 @@ def seed_all(engine, flow_store):
     n_rules = seed_rules(engine.registry)
     seed_dict()
     seed_flow(flow_store)
-    return {"rules": n_rules}
+    n_tickets = seed_tickets(engine)
+    return {"rules": n_rules, "tickets": n_tickets}
+
+
+def seed_tickets(engine):
+    """生成演示复核工单：覆盖待受理（含超时）/ 处理中 / 已通过 / 已驳回 / 已关闭。"""
+    store = engine.tickets
+    if store.list_tickets(page=1, page_size=1)[0]:
+        return 0
+    now = time.time()
+
+    def _demo_event(idx, **over):
+        ev = {
+            "id": f"ev_demo_{idx}",
+            "type": "transfer",
+            "ts": now,
+            "ip": f"10.20.30.{idx}",
+            "user_id": f"u{10000 + idx}",
+            "device_id": "ios",
+            "channel": "app",
+            "country": "CN",
+            "amount": 128000 + idx * 1000,
+        }
+        ev.update(over)
+        return ev
+
+    def _decision(score, rule_id, rule_name, reason):
+        return {
+            "event_id": None,
+            "risk_score": score,
+            "fired_rules": [{
+                "rule_id": rule_id, "rule_name": rule_name, "reason": reason,
+                "risk_score": score, "action": "review", "priority": 90,
+                "agg_values": [],
+            }],
+        }
+
+    cases = [
+        # (事件, 决策, 建单时间偏移秒, 流转动作序列 [(action, by, 偏移秒, 意见)])
+        (_demo_event(1, country="RU"),
+         _decision(70, "rule_highrisk_country", "高风险国家交易", "高风险地区交易"),
+         -7200, []),
+        (_demo_event(2, amount=156000),
+         _decision(72, "rule_big_transfer", "大额转账检测", "大额转账需人工复核"),
+         -1800, []),
+        (_demo_event(3, risk_hint="amount_spike"),
+         _decision(58, "rule_amount_spike", "金额突增检测", "金额突增"),
+         -900, [("accept", "alice", -800, "")]),
+        (_demo_event(4, amount=118000, country="BR"),
+         _decision(65, "rule_highrisk_country", "高风险国家交易", "高风险地区交易"),
+         -86400,
+         [("accept", "alice", -86000, ""),
+          ("approve", "alice", -85500, "核实为客户本人留学缴费，材料齐全，予以通过")]),
+        (_demo_event(5, amount=230000, channel="openapi"),
+         _decision(78, "rule_big_transfer", "大额转账检测", "大额转账需人工复核"),
+         -172800,
+         [("accept", "alice", -172000, ""),
+          ("reject", "admin", -171000, "收款账户命中黑名单，交易特征异常，驳回并冻结资金")]),
+        (_demo_event(6, amount=105000, risk_hint="new_device"),
+         _decision(60, "rule_amount_spike", "金额突增检测", "金额突增"),
+         -259200,
+         [("accept", "admin", -258000, ""),
+          ("close", "admin", -257000, "客户主动撤单，无需继续复核，关闭")]),
+    ]
+
+    count = 0
+    for i, (event, decision, created_off, actions) in enumerate(cases, 1):
+        event["ts"] = now + created_off
+        decision["event_id"] = event["id"]
+        ticket, created = store.create_for_event(
+            event, decision, source="rule_engine",
+            source_name="风控规则引擎", ts=now + created_off)
+        for act, by, off, comment in actions:
+            store.transition(ticket["id"], act, handler=by,
+                             comment=comment, ts=now + off)
+        count += 1
+    return count
+

@@ -1,0 +1,71 @@
+{
+  "tickets": [
+    {
+      "id": "tk_1790303368337_0003",
+      "event_id": "ev_demo_4",
+      "source": "rule_engine",
+      "source_name": "风控规则引擎",
+      "summary": "transfer，金额 ¥118000，地区 BR，渠道 app，命中「高风险国家交易」，风险分 65",
+      "event_type": "transfer",
+      "event": {
+        "id": "ev_demo_4",
+        "type": "transfer",
+        "ts": 1790303368.3378892,
+        "ip": "10.20.30.4",
+        "user_id": "u10004",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "BR",
+        "amount": 118000
+      },
+      "subject": {
+        "user_id": "u10004",
+        "ip": "10.20.30.4",
+        "device_id": "ios",
+        "channel": "app",
+        "country": "BR"
+      },
+      "hit_rules": [
+        {
+          "rule_id": "rule_highrisk_country",
+          "rule_name": "高风险国家交易",
+          "reason": "高风险地区交易",
+          "risk_score": 65,
+          "action": "review",
+          "priority": 90,
+          "agg_values": []
+        }
+      ],
+      "risk_score": 65,
+      "status": "processing",
+      "assignee": "alice",
+      "creator": "system",
+      "created_at": 1790303368.3378892,
+      "updated_at": 1790303768.3378892,
+      "accepted_at": 1790303768.3378892,
+      "approved_at": null,
+      "rejected_at": null,
+      "closed_at": null,
+      "disposition": null,
+      "disposition_by": null,
+      "disposition_ts": null,
+      "timeout_sec": 3600,
+      "comments": [
+        {
+          "action": "create",
+          "action_label": "系统建单",
+          "by": "system",
+          "ts": 1790303368.3378892,
+          "comment": "风控判定为人工复核，系统自动建单"
+        },
+        {
+          "action": "accept",
+          "action_label": "受理",
+          "by": "alice",
+          "ts": 1790303768.3378892,
+          "comment": "受理"
+        }
+      ]
+    }
+  ]
+}

@@ -106,10 +106,29 @@ window.UI = (function () {
     const [l, c] = map[s] || [s, "muted"];
     return `<span class="badge ${c}">${l}</span>`;
   }
+  function ticketStatusBadge(s) {
+    const map = {
+      pending: ["待受理", "warning"],
+      processing: ["处理中", "info"],
+      approved: ["已通过", "success"],
+      rejected: ["已驳回", "danger"],
+      closed: ["已关闭", "muted"],
+    };
+    const [l, c] = map[s] || [s, "muted"];
+    return `<span class="badge ${c}">${l}</span>`;
+  }
+  function overdueTag(t) {
+    if (!t.overdue) return "";
+    const h = Math.floor(t.overdue_sec / 3600);
+    const m = Math.floor((t.overdue_sec % 3600) / 60);
+    const dur = h > 0 ? `${h}小时${m}分` : `${m}分钟`;
+    return `<span class="badge overdue-badge">⏰ 超时 ${dur}</span>`;
+  }
   function jsonPretty(obj) {
     return JSON.stringify(obj, null, 2);
   }
-  return { toast, esc, fmtTime, modal, badge, actionBadge, levelBadge, statusBadge, jsonPretty };
+  return { toast, esc, fmtTime, modal, badge, actionBadge, levelBadge, statusBadge,
+           ticketStatusBadge, overdueTag, jsonPretty };
 })();
 
 /* 会话 / 导航 */
@@ -136,6 +155,7 @@ window.App = (function () {
     ["flows.html", "🔀", "决策流设计"],
     ["events.html", "⚡", "实时事件流"],
     ["alerts.html", "🔔", "告警列表"],
+    ["tickets.html", "📝", "复核工单"],
     ["stats.html", "📈", "统计报表"],
     ["versions.html", "🕘", "规则版本管理"],
     ["sandbox.html", "🧪", "测试沙箱"],
