@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>复核工单 · 风控引擎</title>
+<link rel="stylesheet" href="assets/css/style.css">
+<script src="assets/js/api.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+let page = 1;
+const PAGE_SIZE = 15;
+let refreshTimer = null;
+
+const SOURCE_LABEL = { rule_engine: "规则引擎", decision_flow: "决策流" };
+
+function subjectText(s) {
+  if (!s) return "-";
+  const parts = [];
+  for (const k of ["user_id", "ip", "device_id", "account", "merchant_id"]) {
+    if (s[k] != null) parts.push(`${k}=${s[k]}`);
+  }
+  return parts.join(" ") || "-";
+}
+
+async function loadStats() {
+  const r = await API.get("/api/tickets/stats");
+  const s = r.stats;
+  document.getElementById("tk-stats").innerHTML = `
+    <div class="grid cols-4">
+      <div class="stat"><div class="label">工单总数</div><div class="value">${s.total}</div><div class="hint">未结 ${s.open}</div></div>
+      <div class="stat"><div class="label">待受理</div><div class="value warning">${s.pending}</div><div class="hint">处理中 ${s.processing}</div></div>
+      <div class="stat"><div class="label">超时未处理</div><div class="value ${s.overdue ? "danger" : ""}">${s.overdue}</div><div class="hint">需优先处理</div></div>
+      <div class="stat"><div class="label">已通过 / 已驳回</div><div class="value"><span class="text-warning" style="color:#15803d">${s.approved}</span> / <span style="color:#b91c1c">${s.rejected}</span></div><div class="hint">已关闭 ${s.closed}</div></div>
+    </div>`;
+  // 超时醒目提醒条
+  const banner = document.getElementById("overdue-banner");
+  if (s.overdue > 0) {
+    banner.style.display = "flex";
+    banner.innerHTML = `⚠️ 有 <b>${s.overdue}</b> 张复核工单已超时未处理，请尽快受理处置！
+      <button class="btn sm danger" onclick="filterOverdue()">只看超时</button>`;
+  } else {
+    banner.style.display = "none";
+    banner.innerHTML = "";
+  }
+}
+
+function currentFilters() {
+  const f = {
+    page, page_size: PAGE_SIZE,
+    status: document.getElementById("f-status").value,
+    keyword: document.getElementById("f-keyword").value.trim(),
+    handler: document.getElementById("f-handler").value.trim(),
+  };
+  const start = document.getElementById("f-start").value;
+  const end = document.getElementById("f-end").value;
+  if (start) f.start = (new Date(start).getTime() / 1000).toFixed(0);
+  if (end) f.end = (new Date(end).getTime() / 1000).toFixed(0);
+  if (document.getElementById("f-overdue").checked) f.overdue = "1";
+  return f;
+}
+
+async function load() {
+  const q = new URLSearchParams(currentFilters());
+  const r = await API.get("/api/tickets?" + q.toString());
+  const tbody = document.getElementById("tk-list");
+  tbody.innerHTML = r.tickets.map(t => {
+    const overdueBadge = t.overdue ? `<span class="badge overdue">超时</span>` : "";
+    const rowCls = t.overdue ? "row-overdue" : "";
+    const ops = rowOps(t);
+    return `<tr class="${rowCls}">
+      <td class="mono">${UI.esc(t.id)}</td>
+      <td style="max-width:240px">${UI.esc(t.title)}<div class="muted" style="font-size:11px">${UI.esc(SOURCE_LABEL[t.source] || t.source)}</div></td>
+      <td class="mono" style="max-width:180px">${UI.esc(subjectText(t.subject))}</td>
+      <td class="num"><b>${t.risk_score}</b></td>
+      <td class="num">${(t.hit_rules || []).length}</td>
+      <td>${UI.ticketStatusBadge(t.status)} ${overdueBadge}</td>
+      <td>${UI.esc(t.assignee || t.operator || "-")}</td>
+      <td class="mono">${UI.fmtTime(t.event_time)}</td>
+      <td class="text-right">${ops}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">暂无工单</td></tr>`;
+  document.getElementById("total").textContent = r.total;
+  document.getElementById("page-info").textContent = `第 ${r.page} 页 / 共 ${Math.max(1, Math.ceil(r.total / PAGE_SIZE))} 页`;
+  document.getElementById("prev").disabled = page <= 1;
+  document.getElementById("next").disabled = page * PAGE_SIZE >= r.total;
+}
+
+function rowOps(t) {
+  const id = `'${UI.esc(t.id)}'`;
+  let btns = [];
+  if (t.status === "pending") {
+    btns.push(`<button class="btn sm primary" onclick="act(${id},'accept')">受理</button>`);
+    btns.push(`<button class="btn sm success" onclick="act(${id},'approve')">通过</button>`);
+    btns.push(`<button class="btn sm danger" onclick="act(${id},'reject')">驳回</button>`);
+    btns.push(`<button class="btn sm" onclick="act(${id},'close')">关闭</button>`);
+  } else if (t.status === "processing") {
+    btns.push(`<button class="btn sm success" onclick="act(${id},'approve')">通过</button>`);
+    btns.push(`<button class="btn sm danger" onclick="act(${id},'reject')">驳回</button>`);
+    btns.push(`<button class="btn sm" onclick="act(${id},'close')">关闭</button>`);
+  }
+  btns.push(`<button class="btn sm ghost" onclick="detail(${id})">详情</button>`);
+  return `<div class="flex" style="justify-content:flex-end;gap:4px;flex-wrap:wrap">${btns.join("")}</div>`;
+}
+
+function applyFilters() { page = 1; load(); }
+function filterOverdue() {
+  document.getElementById("f-overdue").checked = true;
+  document.getElementById("f-status").value = "";
+  applyFilters();
+}
+
+const ACTION_META = {
+  accept: { label: "受理", needComment: false },
+  approve: { label: "通过", needComment: true },
+  reject: { label: "驳回", needComment: true },
+  close: { label: "关闭", needComment: false },
+};
+
+function act(id, action) {
+  const meta = ACTION_META[action];
+  const m = UI.modal(`${meta.label}工单`, `
+    <div class="field"><label>工单号</label><input value="${UI.esc(id)}" disabled></div>
+    <div class="field"><label>处理意见${meta.needComment ? "" : "（可选）"}</label>
+      <textarea id="act-comment" rows="3" placeholder="填写处理意见…"></textarea></div>
+  `, `<button class="btn" onclick="document.getElementById('modal-mask').classList.remove('show')">取消</button>
+      <button class="btn primary" id="act-confirm">确认${meta.label}</button>`);
+  m.foot.querySelector("#act-confirm").onclick = async () => {
+    const comment = document.getElementById("act-comment").value.trim();
+    if (meta.needComment && !comment) { UI.toast("请填写处理意见", "warn"); return; }
+    try {
+      await API.post(`/api/tickets/${id}/${action}`, { comment });
+      UI.toast(`已${meta.label}`, "ok");
+      m.close();
+      refresh();
+    } catch (e) { UI.toast(e.message, "err"); }
+  };
+}
+
+async function detail(id) {
+  const m = UI.modal("工单详情", `<div id="d-body">加载中…</div>`);
+  const r = await API.get("/api/tickets/" + id);
+  const t = r.ticket;
+  const rules = (t.hit_rules || []).map(x =>
+    `<li>${UI.esc(x.rule_name || x.rule_id)} <span class="muted">(${UI.esc(x.rule_id)})</span> · 风险分 ${x.risk_score}</li>`).join("") || "<li class='muted'>无（决策流判定）</li>";
+  const timeline = (t.history || []).slice().reverse().map(h => `
+    <li>
+      <div><b>${UI.esc(h.action)}</b> ${h.from ? UI.esc(h.from) + " → " : ""}${UI.esc(h.to)}</div>
+      <div class="tl-meta">${UI.esc(h.operator || "system")} · ${UI.fmtTime(h.ts)}</div>
+      ${h.comment ? `<div class="tl-comment">💬 ${UI.esc(h.comment)}</div>` : ""}
+    </li>`).join("");
+  document.getElementById("d-body").innerHTML = `
+    <dl class="kv">
+      <dt>工单号</dt><dd class="mono">${UI.esc(t.id)} ${t.overdue ? '<span class="badge overdue">超时</span>' : ""}</dd>
+      <dt>状态</dt><dd>${UI.ticketStatusBadge(t.status)}</dd>
+      <dt>标题</dt><dd>${UI.esc(t.title)}</dd>
+      <dt>风险分</dt><dd><b>${t.risk_score}</b></dd>
+      <dt>来源</dt><dd>${UI.esc(SOURCE_LABEL[t.source] || t.source)}${t.flow_name ? " · " + UI.esc(t.flow_name) : ""}</dd>
+      <dt>事件类型</dt><dd>${UI.esc(t.event_type || "-")}</dd>
+      <dt>事件概要</dt><dd>${UI.esc(t.event_summary || "-")}</dd>
+      <dt>主体信息</dt><dd class="mono">${UI.esc(subjectText(t.subject))}</dd>
+      <dt>发生时间</dt><dd>${UI.fmtTime(t.event_time)}</dd>
+      <dt>创建时间</dt><dd>${UI.fmtTime(t.created_at)}</dd>
+      <dt>受理时间</dt><dd>${UI.fmtTime(t.accepted_at)}</dd>
+      <dt>处理时间</dt><dd>${UI.fmtTime(t.processed_at)}</dd>
+      <dt>关闭时间</dt><dd>${UI.fmtTime(t.closed_at)}</dd>
+      <dt>处理时限</dt><dd>${UI.fmtTime(t.deadline)}</dd>
+      <dt>受理人</dt><dd>${UI.esc(t.assignee || "-")}</dd>
+      <dt>处理人</dt><dd>${UI.esc(t.operator || "-")}</dd>
+      <dt>处理意见</dt><dd>${UI.esc(t.comment || "-")}</dd>
+      ${t.result ? `<dt>处置结果</dt><dd>${UI.ticketStatusBadge(t.result)}</dd>` : ""}
+    </dl>
+    <h4 style="margin:14px 0 6px">命中规则</h4>
+    <ul style="margin:0;padding-left:18px;font-size:13px">${rules}</ul>
+    <h4 style="margin:14px 0 6px">流转轨迹</h4>
+    <ul class="timeline">${timeline}</ul>
+    <h4 style="margin:14px 0 6px">事件快照</h4>
+    <pre class="json-view">${UI.esc(UI.jsonPretty(t.event_snapshot || {}))}</pre>`;
+}
+
+function refresh() { loadStats(); load(); }
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(refresh, 5000);
+}
+
+// 实时推送：新工单即时刷新
+function connectWS() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  let ws;
+  try { ws = new WebSocket(`${proto}://${location.host}/api/ws/events`); } catch (e) { return; }
+  ws.onmessage = (msg) => {
+    let data; try { data = JSON.parse(msg.data); } catch (e) { return; }
+    if (data.kind === "ticket") { refresh(); UI.toast("新复核工单 " + data.ticket.id, "warn"); }
+  };
+  ws.onclose = () => setTimeout(connectWS, 4000);
+}
+
+boot("复核工单", () => {
+  const page = document.getElementById("page");
+  page.innerHTML = `
+    <div id="overdue-banner" class="overdue-banner" style="display:none"></div>
+    <div id="tk-stats"></div>
+    <div class="card">
+      <div class="card-head"><h3>📝 复核工单中心</h3>
+        <button class="btn sm" onclick="refresh()">刷新</button>
+      </div>
+      <div class="sub">风控规则或决策流判定为「人工复核」的事件自动生成工单；通过 / 驳回结果将沉淀为该事件的最终处置结论</div>
+      <div class="flex mb" style="flex-wrap:wrap;gap:8px">
+        <div class="field" style="margin:0;width:130px"><select id="f-status">
+          <option value="">全部状态</option>
+          <option value="pending">待受理</option>
+          <option value="processing">处理中</option>
+          <option value="approved">已通过</option>
+          <option value="rejected">已驳回</option>
+          <option value="closed">已关闭</option>
+        </select></div>
+        <div class="field" style="margin:0;width:130px"><input id="f-handler" placeholder="处理人"></div>
+        <div class="field" style="margin:0;width:170px"><input id="f-start" type="datetime-local" title="发生时间起"></div>
+        <div class="field" style="margin:0;width:170px"><input id="f-end" type="datetime-local" title="发生时间止"></div>
+        <div class="field" style="margin:0;width:180px"><input id="f-keyword" placeholder="关键词（标题/主体/事件号）"></div>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin:0">
+          <input type="checkbox" id="f-overdue" style="width:auto"> 只看超时
+        </label>
+        <button class="btn sm primary" onclick="applyFilters()">查询</button>
+        <span class="muted" style="margin-left:auto">共 <b id="total">0</b> 条</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>工单号</th><th>标题</th><th>主体</th><th>风险分</th><th>命中规则</th>
+            <th>状态</th><th>处理人</th><th>发生时间</th><th class="text-right">操作</th>
+          </tr></thead>
+          <tbody id="tk-list"></tbody>
+        </table>
+      </div>
+      <div class="flex mt" style="justify-content:flex-end">
+        <button class="btn sm" id="prev" onclick="page--;load()">上一页</button>
+        <span class="muted" id="page-info"></span>
+        <button class="btn sm" id="next" onclick="page++;load()">下一页</button>
+      </div>
+    </div>`;
+  refresh();
+  startAutoRefresh();
+  connectWS();
+});
+</script>
+</body>
+</html>

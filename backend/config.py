@@ -23,10 +23,12 @@ FLOWS_DIR = os.path.join(DATA_DIR, "flows")        # 决策流
 DICT_DIR = os.path.join(DATA_DIR, "dict")          # 数据字典
 SETTINGS_DIR = os.path.join(DATA_DIR, "settings")  # 系统设置
 WINDOWS_DIR = os.path.join(DATA_DIR, "windows")    # 滑动窗口状态（可选持久化快照）
+TICKETS_DIR = os.path.join(DATA_DIR, "tickets")    # 人工复核工单
 
 USERS_FILE = os.path.join(USERS_DIR, "users.json")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "system.json")
 DICT_FILE = os.path.join(DICT_DIR, "dict.json")
+TICKETS_FILE = os.path.join(TICKETS_DIR, "tickets.json")
 
 # 服务配置
 API_HOST = os.environ.get("RISK_HOST", "0.0.0.0")
@@ -51,6 +53,10 @@ DEFAULT_SETTINGS = {
         "levels": ["低", "中", "高", "严重"],
         "default_level": "中",
     },
+    "ticket": {
+        "sla_hours": 24,               # 工单处理时限（小时），超时未处理将醒目提醒
+        "active_flow_id": "",          # 生效决策流 id（为空表示仅用规则引擎决策）
+    },
     "event_types": ["login", "register", "order", "payment", "transfer", "withdraw", "sms", "api"],
     "dict_categories": ["事件类型", "风险等级", "动作类型", "渠道", "设备类型", "IP 段"],
 }
@@ -68,7 +74,7 @@ AGG_TYPES = ["count", "sum", "avg", "distinct_count", "max", "min"]
 def ensure_dirs():
     """确保所有数据目录存在。"""
     for d in (RULES_DIR, VERSIONS_DIR, EVENTS_DIR, ALERTS_DIR, USERS_DIR,
-              FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR):
+              FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR, TICKETS_DIR):
         os.makedirs(d, exist_ok=True)
     if not os.path.exists(SETTINGS_FILE):
         from backend.storage import atomic_write_json

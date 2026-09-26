@@ -17,12 +17,12 @@ from backend import config
 from backend.storage import atomic_write_json, read_json
 from backend.engine.rule_parser import compile_condition, compile_condition_cached, RuleValidationError
 
-ACTION_RANK = {"reject": 1, "review": 3, "alert": 2, "pass": 0}
+ACTION_RANK = {"reject": 3, "review": 2, "alert": 1, "pass": 0}
 
 
 def _scale_score(raw):
     try:
-        return int(raw) // 10
+        return int(raw)
     except (TypeError, ValueError):
         return 0
 
@@ -114,10 +114,8 @@ class CompiledFlow:
             atype = a.get("action", "pass")
             if atype not in ACTION_RANK:
                 atype = "pass"
-            if ACTION_RANK.get(atype, 0) >= ACTION_RANK.get(action, 0):
+            if ACTION_RANK.get(atype, 0) > ACTION_RANK.get(action, 0):
                 action = atype
-        if action == "reject":
-            action = "review"
         return {
             "flow_id": self.id,
             "flow_name": self.name,

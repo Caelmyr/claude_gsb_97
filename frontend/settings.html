@@ -11,11 +11,13 @@
 <div id="app"></div>
 <script>
 let settings = null;
+let flows = [];
 
 async function load() {
   const r = await API.get("/api/settings");
   settings = r.settings;
   const e = settings.engine;
+  const tk = settings.ticket || {};
   document.getElementById("site_name").value = settings.site_name;
   document.getElementById("mode").value = e.mode;
   document.getElementById("dedup_window").value = e.dedup_window_sec;
@@ -24,6 +26,13 @@ async function load() {
   document.getElementById("w_max_keys").value = e.window_max_keys;
   document.getElementById("w_max_ev_key").value = e.window_max_events_per_key;
   document.getElementById("w_max_total").value = e.window_max_total_events;
+  document.getElementById("sla_hours").value = tk.sla_hours != null ? tk.sla_hours : 24;
+  // 生效决策流下拉
+  try { flows = (await API.get("/api/flows")).flows || []; } catch (e2) { flows = []; }
+  const sel = document.getElementById("active_flow");
+  sel.innerHTML = `<option value="">（不启用决策流，仅用规则引擎）</option>` +
+    flows.map(f => `<option value="${UI.esc(f.id)}">${UI.esc(f.name || f.id)}</option>`).join("");
+  sel.value = tk.active_flow_id || "";
 }
 
 async function save() {
@@ -38,9 +47,13 @@ async function save() {
       window_max_events_per_key: parseInt(document.getElementById("w_max_ev_key").value) || 20000,
       window_max_total_events: parseInt(document.getElementById("w_max_total").value) || 2000000,
     },
+    ticket: {
+      sla_hours: parseFloat(document.getElementById("sla_hours").value) || 24,
+      active_flow_id: document.getElementById("active_flow").value,
+    },
   };
   await API.put("/api/settings", patch);
-  UI.toast("设置已保存（匹配模式切换即时生效，其余参数重启后生效）", "ok");
+  UI.toast("设置已保存（匹配模式 / 工单配置即时生效，其余参数重启后生效）", "ok");
   load();
 }
 
@@ -64,6 +77,8 @@ boot("系统设置", () => {
         <div class="field"><label>滑动窗口最大键数</label><input id="w_max_keys" type="number"></div>
         <div class="field"><label>单键最大事件数</label><input id="w_max_ev_key" type="number"></div>
         <div class="field"><label>窗口最大事件总数</label><input id="w_max_total" type="number"></div>
+        <div class="field"><label>工单处理时限（小时）</label><input id="sla_hours" type="number" step="0.5"></div>
+        <div class="field"><label>生效决策流（参与事件决策）</label><select id="active_flow"></select></div>
       </div>
       <button class="btn primary" onclick="save()">保存设置</button>
     </div>

@@ -308,3 +308,26 @@ svg.flow-edges path { fill: none; stroke: #94a3b8; stroke-width: 2; marker-end: 
 .diff-del { background: #fee2e2; }
 .diff-same { color: #6b7280; }
 pre.json-view { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-size: 12.5px; }
+
+/* ---------- 复核工单 ---------- */
+.badge.overdue { background: #dc2626; color: #fff; animation: overdue-blink 1.4s ease-in-out infinite; }
+@keyframes overdue-blink { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+tr.row-overdue td { background: #fef2f2; }
+.overdue-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;
+  border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; font-weight: 600;
+}
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { position: relative; padding: 0 0 16px 22px; border-left: 2px solid var(--border); margin-left: 6px; }
+.timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline li::before {
+  content: ""; position: absolute; left: -7px; top: 2px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--border);
+}
+.timeline .tl-meta { font-size: 12px; color: var(--text-dim); }
+.timeline .tl-comment { font-size: 13px; margin-top: 2px; }
+.kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 13px; }
+.kv dt { color: var(--text-dim); }
+.kv dd { margin: 0; word-break: break-all; }
+.text-warning { color: #b45309; font-weight: 700; }

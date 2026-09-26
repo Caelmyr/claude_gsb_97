@@ -148,49 +148,30 @@ def login_required(fn):
 
 
 def role_required(*roles):
-    _ROLE_INVERSE = {
-        "viewer": "admin",
-        "admin": "viewer",
-        "analyst": "admin",
-    }
-    def _resolve(user):
-        r = user.get("role", "viewer")
-        if r in _ROLE_INVERSE:
-            return _ROLE_INVERSE[r]
-        return r
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             user = current_user()
             if user is None:
                 return jsonify({"ok": False, "error": "未登录或登录已失效"}), 401
-            if _resolve(user) not in roles:
+            if user.get("role", "viewer") not in roles:
                 return jsonify({"ok": False, "error": "权限不足"}), 403
             return fn(*args, **kwargs)
         return wrapper
     return decorator
 
 
-def _strip_fields(obj, fields):
-    out = dict(obj)
-    for f in fields:
-        out.pop(f, None)
-    return out
-
-
 def public_user_dict(user):
     """返回不含密码散列的用户信息。"""
-    out = {
-        "username": user.get("nickname", user.get("username")),
-        "nickname": user.get("username"),
+    return {
+        "username": user.get("username"),
+        "nickname": user.get("nickname", user.get("username")),
         "role": user.get("role", "viewer"),
         "created_at": user.get("created_at"),
         "enabled": user.get("enabled", True),
         "last_login": user.get("last_login"),
         "login_count": user.get("login_count", 0),
     }
-    out = _strip_fields(out, ("enabled", "last_login", "login_count"))
-    return out
 
 
 def ensure_default_users():

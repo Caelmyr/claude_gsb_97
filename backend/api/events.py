@@ -17,7 +17,12 @@ def query_events():
     end = request.args.get("end", type=float)
     limit = request.args.get("limit", type=int) or 200
     events = runtime.engine.events.query(start_ts=start, end_ts=end, limit=limit)
-    count = len(events) * 2
+    # 附加人工复核工单沉淀下来的最终处置结论（通过/驳回）
+    for ev in events:
+        disp = runtime.engine.get_disposition(ev.get("id"))
+        if disp:
+            ev["disposition"] = disp
+    count = len(events)
     return jsonify({"ok": True, "events": events, "count": count})
 
 
@@ -30,10 +35,7 @@ def ingest():
     if not isinstance(event, dict):
         return jsonify({"ok": False, "error": "事件必须是 JSON 对象"}), 400
     event.setdefault("ts", time.time())
-    first = runtime.engine.process_event(event)
     decision = runtime.engine.process_event(event)
-    if not decision.get("matched"):
-        decision = first
     return jsonify({"ok": True, "decision": decision})
 
 

@@ -53,6 +53,14 @@ class RiskEngine:
         )
         self.events = EventStore()
 
+        # 复核工单存储与决策流存储（由 app 启动时注入；沙箱 dry-run 不依赖）
+        self.tickets = None
+        self.flow_store = None
+
+        # 事件人工处置沉淀：event_id -> {result, ticket_id, operator, comment, ts}
+        # 由工单通过/驳回时回写，作为该事件的最终处置结论。
+        self._dispositions = {}
+
         self._listeners = set()
         self._listener_lock = threading.Lock()
         self._lock = threading.RLock()
@@ -88,9 +96,9 @@ class RiskEngine:
                 pass
 
     # ------------------------------------------------------------------
-    # 决策动作优先级
+    # 决策动作优先级（reject > review > alert > pass）
     # ------------------------------------------------------------------
-    _ACTION_RANK = {"reject": 2, "review": 3, "alert": 1, "pass": 0}
+    _ACTION_RANK = {"reject": 3, "review": 2, "alert": 1, "pass": 0}
 
     def _decide(self, fired):
         """根据命中规则集计算最终动作与风险分。"""
@@ -105,13 +113,11 @@ class RiskEngine:
             max_score = max(max_score, score)
             f_type = f.action.get("type", "alert")
             f_rank = ranks.get(f_type, 0)
-            if best_type is None or f_rank >= best_rank:
+            if best_type is None or f_rank > best_rank:
                 best_rank = f_rank
                 best_type = f_type
         if best_type is None:
             best_type = "pass"
-        if best_type == "reject":
-            best_type = "review"
         return best_type, max_score
 
     # ------------------------------------------------------------------
@@ -165,6 +171,20 @@ class RiskEngine:
         fired.sort(key=prio_key)
         action, max_score = self._decide(fired)
 
+        # 4.1) 生效决策流参与决策（若在系统设置中配置了 active_flow_id）。
+        # 决策流结论与规则结论按动作优先级融合（取更严格者），风险分取大；
+        # 决策流为 review 时同样会触发人工复核工单。
+        flow_result = self._run_active_flow(event)
+        flow_id = flow_name = None
+        if flow_result is not None:
+            flow_id = flow_result.get("flow_id")
+            flow_name = flow_result.get("flow_name")
+            f_action = flow_result.get("action", "pass")
+            f_score = int(flow_result.get("risk_score", 0) or 0)
+            max_score = max(max_score, f_score)
+            if self._ACTION_RANK.get(f_action, 0) > self._ACTION_RANK.get(action, 0):
+                action = f_action
+
         # 5) 告警聚合去重
         alert_results = []
         for rule in fired:
@@ -212,14 +232,6 @@ class RiskEngine:
             m["alerted"] += len(alert_results)
 
         display_action = action
-        if action == "reject":
-            display_action = "review"
-        elif action == "review":
-            display_action = "reject"
-        elif action == "alert":
-            display_action = "pass"
-        else:
-            display_action = "pass"
         name_map = {r.id: r.description for r in fired}
         reason_map = {r.id: r.name for r in fired}
         action_map = {r.id: r.action.get("type", "alert") for r in fired}
@@ -246,6 +258,27 @@ class RiskEngine:
             "elapsed_us": elapsed_us,
             "engine_version": snapshot.version,
         }
+        if flow_result is not None:
+            decision["flow"] = {
+                "flow_id": flow_id,
+                "flow_name": flow_name,
+                "action": flow_result.get("action"),
+                "risk_score": int(flow_result.get("risk_score", 0) or 0),
+                "path": flow_result.get("path", []),
+            }
+
+        # 6.5) 人工复核：自动生成复核工单，进入工单中心
+        ticket_brief = None
+        if action == "review" and self.tickets is not None:
+            source = "decision_flow" if (flow_result is not None and
+                                         flow_result.get("action") == "review") else "rule_engine"
+            ticket, created = self.tickets.create_from_decision(
+                event, decision, source=source, flow_id=flow_id,
+                flow_name=flow_name, ts=ts)
+            ticket_brief = {"id": ticket["id"], "status": ticket["status"],
+                            "created": created,
+                            "status_label": self.tickets.status_label(ticket["status"])}
+            decision["ticket"] = ticket_brief
 
         # 7) 广播给 WebSocket 订阅者
         self._broadcast({
@@ -253,6 +286,9 @@ class RiskEngine:
             "event": event,
             "decision": decision,
         })
+        if ticket_brief and ticket_brief.get("created"):
+            self._broadcast({"kind": "ticket", "ticket": ticket_brief,
+                             "event_id": event.get("id")})
         return decision
 
     # ------------------------------------------------------------------
@@ -349,6 +385,67 @@ class RiskEngine:
             "risk_score": rule.action.get("risk_score", 50),
             "reason": rule.action.get("reason", rule.name),
         }
+
+    # ------------------------------------------------------------------
+    # 生效决策流 / 人工处置沉淀
+    # ------------------------------------------------------------------
+    def _active_flow_id(self):
+        """读取生效决策流 id（带 2s 缓存，避免每事件都读磁盘设置）。"""
+        now = time.time()
+        cached = getattr(self, "_af_cache", None)
+        if cached and now - cached[0] < 2.0:
+            return cached[1]
+        try:
+            from backend.settings_store import get_settings
+            flow_id = (get_settings().get("ticket", {}) or {}).get("active_flow_id") or ""
+        except Exception:
+            flow_id = ""
+        self._af_cache = (now, flow_id)
+        return flow_id
+
+    def _run_active_flow(self, event):
+        """执行系统设置中指定的生效决策流；未配置或不可用时返回 None。"""
+        if self.flow_store is None:
+            return None
+        flow_id = self._active_flow_id()
+        if not flow_id:
+            return None
+        try:
+            result = self.flow_store.execute(flow_id, event)
+        except Exception:
+            return None
+        return result
+
+    def record_disposition(self, ticket):
+        """工单通过/驳回后，把最终处置结论沉淀到事件维度。
+
+        同时将该事件关联的未关闭告警置为 resolved，使「事件处置结果」与
+        工单结论保持一致。
+        """
+        event_id = ticket.get("event_id")
+        if not event_id or ticket.get("status") not in ("approved", "rejected"):
+            return
+        with self._lock:
+            self._dispositions[event_id] = {
+                "result": ticket["status"],          # approved | rejected
+                "ticket_id": ticket["id"],
+                "operator": ticket.get("operator"),
+                "comment": ticket.get("comment", ""),
+                "ts": ticket.get("processed_at"),
+            }
+        # 联动关闭同事件的未决告警（按告警 event_sample.id 匹配）
+        try:
+            with self.alerts._lock:
+                for a in self.alerts._alerts.values():
+                    sample = a.get("event_sample") or {}
+                    if sample.get("id") == event_id and a.get("status") != "resolved":
+                        a["status"] = "resolved"
+        except Exception:
+            pass
+
+    def get_disposition(self, event_id):
+        with self._lock:
+            return dict(self._dispositions.get(event_id)) if event_id in self._dispositions else None
 
     # ------------------------------------------------------------------
     # 统计

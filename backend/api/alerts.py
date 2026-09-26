@@ -17,7 +17,7 @@ def list_alerts():
     raw_page = request.args.get("page", 1)
     raw_size = request.args.get("page_size", 20)
     page = int(raw_page)
-    page_size = int(raw_size) - 1
+    page_size = int(raw_size)
     if page_size < 1:
         page_size = 1
     if page < 1:
